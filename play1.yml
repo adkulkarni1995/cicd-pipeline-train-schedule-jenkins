@@ -1,0 +1,61 @@
+---
+- hosts: local
+  connection: local
+  gather_facts: False
+  vars:
+    region: us-east-2
+    instance_type: t2.micro
+    ami: ami-01a834fd83ae239ff
+    keypair: Test
+    vpc_title: 'centos3 vpc'
+    vpc_name: "{{ vpc_title }} VPC"
+    igw_name: "{{ vpc_title }} IGW"
+    subnet_name: "{{ vpc_title }} Subnet"
+    vpcCidrBlock: '10.0.0.0/16'
+    subNetCidrBlock: '10.0.1.0/24'
+
+  tasks:
+  
+    - name: create security group
+      ec2_group:
+        name: CreatedNow
+        description: The webservers security group
+        vpc_id: vpc-0802d359e2ec723e7
+        region: "{{ region }}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+    - name: Create an Ec2 Instance
+      ec2:
+        key_name: "{{ keypair }}"
+        group: CreatedNow
+        instance_type: "{{ instance_type }}"
+        image: "{{ ami }}"
+        wait: True
+        region: "{{ region }}"
+        vpc_subnet_id: subnet-0ddee68658a02bd5f
+        count: 3
+        assign_public_ip: yes
+      register: ec2
+
+
+    - name: add newly created instance to th host file
+      add_host:
+         name: "{{ item.public_ip }}"
+         groups: Centos
+      with_items: "{{ ec2.instances }}"
+
+    - name: wait for SSH to come up
+      wait_for:
+        host: "{{ item.public_ip }}"
+        port: 22
+        state: started
+      with_items: "{{ ec2.instances }}"
+
